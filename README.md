@@ -1,1 +1,1 @@
-multiplayer game hosted at localhost:8080
+multiplayer game hosted at http://localhost:8080
