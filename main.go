@@ -36,7 +36,6 @@ type GameState struct {
 }
 
 var players = make(map[string]*Player)
-var previousGameState GameState
 var gameStateMutex sync.Mutex
 
 func main() {
