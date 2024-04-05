@@ -1,4 +1,4 @@
-module DukeHank
+module github.com/4cecoder/multiplayer
 
 go 1.22
 
