@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="">
+<head>
+    <title>Multiplayer Game</title>
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
+</head>
+<body>
+<div id="gameContainer">
+    <div id="gameArea"></div>
+    <div id="gameOverlay">
+        <p>Use WASD or arrow keys to move your player.</p>
+        <button class="button" id="pauseButton">Pause</button>
+    </div>
+</div>
+<div id="pauseMenu" style="display: none;">
+    <h2>Pause Menu</h2>
+    <label for="playerName">Player Name:</label>
+    <input type="text" id="playerName" maxlength="10">
+    <div>
+    <label for="playerColor">Player Color:</label>
+    <input type="color" id="playerColor">
+        </div>
+    <button class="button" id="resumeButton">Resume</button>
+</div>
+<script src="/static/game.js"></script>
+</body>
+</html>
