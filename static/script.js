@@ -1,7 +1,9 @@
 const port = 8089;
+const siteURL = 'http://isdlife.com';
+const socket = new WebSocket('ws://' +  + ':' + port + '/ws');
 
-const socket = new WebSocket('ws://' + window.location.host + ':' + port + '/ws');
-console.log('Connecting to WebSocket server at ws://' + window.location.host + ':' + port + '/ws');
+console.log('WebSocket connection opened:', socket);
+
 
 // Wrap WebSocket initialization in a try-catch block
 try {
