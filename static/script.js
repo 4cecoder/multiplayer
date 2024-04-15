@@ -1,5 +1,6 @@
 const port = 8089;
 const siteURL = 'http://isdlife.com';
+let socket;
 
 // Wrap WebSocket initialization in a try-catch block
 try {
