@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/4cecoder/multiplayer/handlers"
 	"github.com/go-chi/chi"
@@ -21,6 +22,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(LoggingMiddleware)
 
 	r.Get("/", handlers.HandleRoot)
 	r.Get("/ws", handlers.HandleWebSocket)
@@ -31,8 +33,6 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		log.Println("PORT environment variable not set")
-		log.Println("Using default port 8080")
 		port = "8080" // Default port if not specified
 	}
 
@@ -42,4 +42,20 @@ func main() {
 		log.Fatal(err)
 		return
 	}
+}
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Start timer
+		start := time.Now()
+
+		// Process request
+		next.ServeHTTP(w, r)
+
+		// Stop timer
+		elapsed := time.Since(start)
+
+		// Log details of the request
+		log.Printf("%s %s %s", r.Method, r.RequestURI, elapsed)
+	})
 }
