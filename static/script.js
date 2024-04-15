@@ -3,10 +3,33 @@ const port = 8089;
 const socket = new WebSocket('ws://' + window.location.host + ':' + port + '/ws');
 //const socket = new WebSocket('ws://' + lanIP + ':' + port + '/ws');
 
-socket.onmessage = function (event) {
-    const instruction = JSON.parse(event.data);
-    handleRenderInstruction(instruction);
-};
+// Wrap WebSocket initialization in a try-catch block
+try {
+    const socket = new WebSocket(socketUrl);
+
+    // Listen for messages
+    socket.onmessage = function (event) {
+        const instruction = JSON.parse(event.data);
+        handleRenderInstruction(instruction);
+    };
+
+    // Listen for connection opening
+    socket.addEventListener('open', function (event) {
+        console.log('WebSocket connection opened:', event);
+    });
+
+    // Listen for errors
+    socket.addEventListener('error', function (event) {
+        console.error('WebSocket error observed:', event);
+    });
+
+    // Listen for connection closing
+    socket.addEventListener('close', function (event) {
+        console.log('WebSocket connection closed:', event);
+    });
+} catch (error) {
+    console.error('Error initializing WebSocket:', error);
+}
 
 function handleRenderInstruction(instruction) {
     switch (instruction.type) {
