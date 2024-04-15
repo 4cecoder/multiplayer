@@ -2,7 +2,6 @@ const port = 8089;
 const siteURL = 'http://isdlife.com';
 let socket;
 
-try {
     socket = new WebSocket('ws://' + siteURL.replace('http://', '') + ':' + port + '/ws');
     console.log('WebSocket connection opened:', socket);
 
@@ -26,9 +25,6 @@ try {
     socket.addEventListener('close', function (event) {
         console.log('WebSocket connection closed:', event);
     });
-} catch (error) {
-    console.error('Error initializing WebSocket:', error);
-}
 
 function handleRenderInstruction(instruction) {
     switch (instruction.type) {
