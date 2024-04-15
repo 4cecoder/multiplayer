@@ -39,15 +39,20 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	clientIP := r.RemoteAddr
 
 	// Check if a player with the same IP already exists
+	var existingPlayer *models.Player
 	for _, p := range players {
 		if p.Conn.RemoteAddr().String() == clientIP {
-			// Remove the old player
-			delete(players, p.ID)
+			existingPlayer = p
 			break
 		}
 	}
 
 	playerID := uuid.New().String()
+	if existingPlayer != nil {
+		// Remove the old player
+		handlePlayerRemoval(existingPlayer)
+		playerID = existingPlayer.ID
+	}
 
 	// Generate random color for the player
 	playerColor := fmt.Sprintf("#%06x", rand.Intn(0xFFFFFF))
@@ -308,4 +313,24 @@ func isEncapsulated(player *models.Player, x, y int) bool {
 		}
 	}
 	return crossings%2 != 0
+}
+
+func handlePlayerRemoval(player *models.Player) {
+	// Send a "removePlayer" instruction to all other connected players
+	for _, p := range players {
+		if p.ID != player.ID {
+			instruction := models.RenderInstruction{
+				Type:    "removePlayer",
+				Payload: models.PlayerState{ID: player.ID},
+			}
+			p.WriteChan <- instruction
+		}
+	}
+
+	// Remove the player from the game state
+	delete(players, player.ID)
+	err := player.Conn.Close()
+	if err != nil {
+		log.Println("close:", err)
+	}
 }
