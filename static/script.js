@@ -1,6 +1,6 @@
 //const lanIP = "192.168.1.120"
 const port = 8089;
-const socket = new WebSocket('ws://' + window.location.host + '/ws');
+const socket = new WebSocket('ws://' + window.location.host + ':' + port + '/ws');
 //const socket = new WebSocket('ws://' + lanIP + ':' + port + '/ws');
 
 socket.onmessage = function (event) {
