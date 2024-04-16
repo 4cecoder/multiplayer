@@ -1,3 +1,4 @@
+// Package models player.go
 package models
 
 import (
@@ -48,4 +49,5 @@ type PlayerState struct {
 	PlayerTrail      []Point  `json:"playerTrail"`
 	StartingLand     [][]bool `json:"startingLand"`
 	IsAlive          bool     `json:"isAlive"`
+	Direction        interface{}
 }

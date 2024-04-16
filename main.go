@@ -25,7 +25,7 @@ func main() {
 	r.Use(LoggingMiddleware)
 
 	r.Get("/", handlers.HandleRoot)
-	r.Get("/ws", handlers.HandleWebSocket)
+	r.Get("/ws", handlers.ServeWebSocket)
 
 	// Serve static files
 	fileServer := http.FileServer(http.Dir("./static"))

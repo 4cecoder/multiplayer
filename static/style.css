@@ -170,3 +170,11 @@ input[type="text"]:focus, input[type="color"]:focus {
 input[type="text"]::placeholder {
     color: #00ffff;
 }
+
+.territory-cell {
+    position: absolute;
+    width: 20px; /* Adjust the size based on your grid */
+    height: 20px; /* Adjust the size based on your grid */
+    background-color: rgba(255, 255, 255, 0.5); /* Example color, change as needed */
+    z-index: 1; /* Ensure this is below the player but above the game area background */
+}
