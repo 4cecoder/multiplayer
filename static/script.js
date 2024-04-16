@@ -51,14 +51,6 @@ function handleRenderInstruction(instruction) {
     }
 }
 
-function createPlayerElement(player) {
-    let playerElement = document.createElement('div');
-    playerElement.id = player.id;
-    playerElement.className = 'player';
-    playerElement.style.backgroundColor = player.color;
-    document.getElementById('gameArea').appendChild(playerElement);
-}
-
 function updatePlayerPosition(player) {
     let playerElement = document.getElementById(player.id);
     if (!playerElement) {
@@ -67,6 +59,14 @@ function updatePlayerPosition(player) {
     }
     playerElement.style.left = player.x + 'px';
     playerElement.style.top = player.y + 'px';
+}
+
+function createPlayerElement(player) {
+    let playerElement = document.createElement('div');
+    playerElement.id = player.id;
+    playerElement.className = 'player';
+    playerElement.style.backgroundColor = player.color;
+    return playerElement;
 }
 
 function updatePlayerTrail(player) {
@@ -115,35 +115,98 @@ function removePlayer(player) {
 }
 
 
-
 document.addEventListener('keydown', function (event) {
     if (playerID !== null) {
-        let message = '';
-        switch (event.key) {
-            case 'ArrowUp':
-            case 'w':
-                message = 'up';
+        let direction = '';
+        switch (event.code) {
+            case 'KeyW': // W key
+                direction = 'up';
                 break;
-            case 'ArrowDown':
-            case 's':
-                message = 'down';
+            case 'KeyS': // S key
+                direction = 'down';
                 break;
-            case 'ArrowLeft':
-            case 'a':
-                message = 'left';
+            case 'KeyA': // A key
+                direction = 'left';
                 break;
-            case 'ArrowRight':
-            case 'd':
-                message = 'right';
+            case 'KeyD': // D key
+                direction = 'right';
                 break;
-            case ' ':
-                message = 'stop';
+            case 'Space': // Space key
+                direction = 'stop';
                 break;
+            default:
+                return; // Ignore other keys
         }
-        if (message !== '') {
-            socket.send(message);
-        }
+
+        // Construct the movePayload object
+        const movePayload = {
+            id: playerID,
+            direction: direction
+        };
+
+        // Create the signal message with type 'move'
+        const signalMessage = {
+            type: 'move',
+            content: JSON.stringify(movePayload)
+        };
+
+        // Send the signal message to the server
+        socket.send(JSON.stringify(signalMessage));
     }
 });
 
+// Function to initialize gamepad events
+function setupGamepad() {
+    window.addEventListener("gamepadconnected", function (e) {
+        console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
+            e.gamepad.index, e.gamepad.id,
+            e.gamepad.buttons.length, e.gamepad.axes.length);
+        setInterval(updateGamepadState, 1000 / 60)
+        requestAnimationFrame(updateGamepadState);
+    });
+
+    window.addEventListener("gamepaddisconnected", function (e) {
+        console.log("Gamepad disconnected from index %d: %s",
+            e.gamepad.index, e.gamepad.id);
+    });
+}
+
+function updateGamepadState() {
+    let gamepads = navigator.getGamepads();
+    for (let i = 0; i < gamepads.length; i++) {
+        let gamepad = gamepads[i];
+        if (gamepad) {
+            let direction = '';
+            if (gamepad.axes[1] < -0.5) {
+                direction = 'up';
+            } else if (gamepad.axes[1] > 0.5) {
+                direction = 'down';
+            } else if (gamepad.axes[0] < -0.5) {
+                direction = 'left';
+            } else if (gamepad.axes[0] > 0.5) {
+                direction = 'right';
+            }
+
+            if (direction) {
+                // Construct the movePayload object
+                const movePayload = {
+                    id: playerID,
+                    direction: direction
+                };
+
+                // Create the signal message with type 'move'
+                const signalMessage = {
+                    type: 'move',
+                    content: JSON.stringify(movePayload)
+                };
+
+                // Send the signal message to the server
+                socket.send(JSON.stringify(signalMessage));
+            }
+        }
+    }
+}
+
+
+setupGamepad(); // Initialize gamepad processing
 connectToWebSocket();

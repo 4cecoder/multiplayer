@@ -20,6 +20,102 @@ const (
 var players = make(map[string]*models.Player)
 var playersMutex sync.Mutex
 
+// Validate direction for movement
+func validateDirection(direction string) bool {
+	switch direction {
+	case "up", "down", "left", "right":
+		return true
+	default:
+		return false
+	}
+}
+
+// Update player velocity based on direction
+func updateVelocity(player *models.Player, direction string) {
+	playersMutex.Lock()
+	defer playersMutex.Unlock()
+
+	switch direction {
+	case "up":
+		player.VelocityY = -player.MaxVelocity * player.SpeedMultiplier
+		player.VelocityX = 0
+	case "down":
+		player.VelocityY = player.MaxVelocity * player.SpeedMultiplier
+		player.VelocityX = 0
+	case "left":
+		player.VelocityX = -player.MaxVelocity * player.SpeedMultiplier
+		player.VelocityY = 0
+	case "right":
+		player.VelocityX = player.MaxVelocity * player.SpeedMultiplier
+		player.VelocityY = 0
+	}
+}
+
+// Handle move messages by updating velocity and broadcasting the update
+func handleMoveMessage(client *Client, message models.RenderInstruction) {
+	// turn direction interface into string
+	direction, ok := message.Payload.Direction.(string)
+	if !ok {
+		log.Printf("Invalid direction %s for client %s", message.Payload.Direction, client.ID)
+		return
+	}
+
+	if !validateDirection(direction) {
+		log.Printf("Invalid direction %s for client %s", message.Payload.Direction, client.ID)
+		return
+	}
+
+	log.Printf("Handling move direction %s for client %s", message.Payload.Direction, client.ID)
+	updateVelocity(client.Player, direction)
+	broadcastPlayerState(client.Player)
+}
+
+// Function to broadcast the new player state to all clients
+func broadcastPlayerState(player *models.Player) {
+	state := makePlayerState(player)
+	playersMutex.Lock()
+	defer playersMutex.Unlock()
+
+	for _, client := range clients {
+		client.Send <- state
+	}
+}
+
+// Example function to create a JSON representation of the player's current state
+func makePlayerState(player *models.Player) []byte {
+	state, err := json.Marshal(player)
+	if err != nil {
+		log.Printf("Error marshaling player state: %v", err)
+		return nil
+	}
+	return state
+}
+
+func handleClientMessages(client *Client) {
+	for {
+		event, ok := <-client.EventQueue
+		if !ok {
+			log.Println("Client disconnected, unregistering")
+			unregisterClient(client)
+			return
+		}
+
+		switch event.Type {
+		case EventTypeMessage:
+			handleMessageEvent(client, event.Message)
+		case EventTypeMove:
+			var moveMessage models.RenderInstruction
+			if err := json.Unmarshal(event.Message, &moveMessage); err != nil {
+				log.Printf("Error decoding move message from client %s: %v", client.ID, err)
+				return
+			}
+			handleMoveMessage(client, moveMessage)
+		default:
+			log.Printf("Unhandled event type %d for client %s", event.Type, client.ID)
+		}
+	}
+}
+
 func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -31,6 +127,7 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = generateClientID()
 	}
+	log.Printf("Creating new player: %s", clientID)
 
 	messageQueue := NewMessageQueue()
 	client := NewClient(conn, clientID, messageQueue)
@@ -38,7 +135,7 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Create a new Player instance and associate it with the Client
 	player := &models.Player{
 		ID:               clientID,
-		StartingPosition: models.Point{X: 0, Y: 0}, // Set the starting position
+		StartingPosition: models.Point{X: 0, Y: 0},
 		Name:             "Player " + clientID,
 		Color:            randomColor(),
 		X:                0,
@@ -48,9 +145,9 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 		Acceleration:     0.1,
 		MaxVelocity:      5,
 		Conn:             conn,
-		LandCapture:      make([][]bool, 100, 100), // Initialize the land capture grid
+		LandCapture:      make([][]bool, 100, 100),
 		PlayerTrail:      make([]models.Point, 0),
-		StartingLand:     make([][]bool, 100, 100), // Initialize the starting land grid
+		StartingLand:     make([][]bool, 100, 100),
 		IsAlive:          true,
 		KillStreak:       0,
 		SpeedMultiplier:  1,
@@ -62,12 +159,26 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	playersMutex.Lock()
 	players[clientID] = player
 	playersMutex.Unlock()
-
+	log.Printf("Registering new client: %s", clientID)
 	registerClient(client)
 
-	go client.ReadPump()
-	go client.WritePump()
-	go handleClientMessages(client)
+	go func() {
+		log.Printf("Starting ReadPump for client: %s", clientID)
+		client.ReadPump()
+	}()
+
+	go func() {
+		log.Printf("Starting WritePump for client: %s", clientID)
+		client.WritePump()
+	}()
+
+	go func() {
+		log.Printf("Starting handleClientMessages for client: %s", clientID)
+		handleClientMessages(client)
+	}()
+
+	log.Printf("Broadcasting new player: %s", clientID)
+	broadcastNewPlayer(player)
 }
 
 func registerClient(client *Client) {
@@ -97,27 +208,44 @@ func generateClientID() string {
 	return uuid.New().String()
 }
 
-func handleClientMessages(client *Client) {
-	for {
-		event, ok := <-client.EventQueue
-		if !ok {
-			// The event queue was closed, client has disconnected
-			unregisterClient(client)
-			return
-		}
+//func handleClientMessages(client *Client) {
+//	for {
+//		event, ok := <-client.EventQueue
+//		if !ok {
+//			// The event queue was closed, client has disconnected
+//			unregisterClient(client)
+//			return
+//		}
+//
+//		switch event.Type {
+//		case EventTypeMessage:
+//			handleMessageEvent(client, event.Message)
+//		case EventTypeError:
+//			log.Printf("Error from client %s: %v", client.ID, event.Err)
+//		case EventTypeReconnect:
+//			// Handle reconnect event
+//			log.Printf("Attempting to reconnect client %s", client.ID)
+//		case EventTypeMove:
+//			// Handle move event
+//			log.Printf("Received move signal from client %s: %s", client.ID, string(event.Message))
+//			handleMoveEvent(client, event.Message)
+//		default:
+//			panic("unhandled default case")
+//		}
+//	}
+//}
 
-		switch event.Type {
-		case EventTypeMessage:
-			handleMessageEvent(client, event.Message)
-		case EventTypeError:
-			log.Printf("Error from client %s: %v", client.ID, event.Err)
-		case EventTypeReconnect:
-			// Handle reconnect event
-			log.Printf("Attempting to reconnect client %s", client.ID)
-		default:
-			panic("unhandled default case")
-		}
+func handleMoveEvent(client *Client, message []byte) {
+	// Decode the message
+	var gameMessage models.RenderInstruction
+	err := json.Unmarshal(message, &gameMessage)
+	if err != nil {
+		log.Printf("Error decoding move message from client %s: %v", client.ID, err)
+		return
 	}
+
+	// Handle the move message
+	handleMoveMessage(client, gameMessage)
 }
 
 func handleMessageEvent(client *Client, message []byte) {
@@ -145,54 +273,37 @@ func handleMessageEvent(client *Client, message []byte) {
 	}
 }
 
-func handleMoveMessage(client *Client, message models.RenderInstruction) {
-	// Calculate speed multiplier based on kill streak
-	client.Player.SpeedMultiplier = 1 + float64(client.Player.KillStreak)*0.01
-	if client.Player.SpeedMultiplier > 1.09 { // Cap the speed multiplier at 1.09
-		client.Player.SpeedMultiplier = 1.09
+func broadcastPlayerUpdate(player *models.Player) {
+	playerState := models.RenderInstruction{
+		Type: "updatePlayer",
+		Payload: models.PlayerState{
+			ID:               player.ID,
+			StartingPosition: player.StartingPosition,
+			Name:             player.Name,
+			Color:            player.Color,
+			X:                player.X,
+			Y:                player.Y,
+			VelocityX:        player.VelocityX,
+			VelocityY:        player.VelocityY,
+			LandCapture:      player.LandCapture,
+			PlayerTrail:      player.PlayerTrail,
+			StartingLand:     player.StartingLand,
+			IsAlive:          player.IsAlive,
+			Direction:        nil,
+		},
 	}
 
-	// Handle player movement based on the message
-	switch message.Payload.Direction {
-	case "up":
-		if client.Player.VelocityY >= 0 {
-			client.Player.VelocityY = -client.Player.MaxVelocity * client.Player.SpeedMultiplier
-			client.Player.VelocityX = 0
-		}
-	case "down":
-		if client.Player.VelocityY <= 0 {
-			client.Player.VelocityY = client.Player.MaxVelocity * client.Player.SpeedMultiplier
-			client.Player.VelocityX = 0
-		}
-	case "left":
-		if client.Player.VelocityX >= 0 {
-			client.Player.VelocityX = -client.Player.MaxVelocity * client.Player.SpeedMultiplier
-			client.Player.VelocityY = 0
-		}
-	case "right":
-		if client.Player.VelocityX <= 0 {
-			client.Player.VelocityX = client.Player.MaxVelocity * client.Player.SpeedMultiplier
-			client.Player.VelocityY = 0
-		}
-	case "stop":
-		client.Player.VelocityX = 0
-		client.Player.VelocityY = 0
+	jsonMessage, err := json.Marshal(playerState)
+	if err != nil {
+		log.Println("error marshalling player update message:", err)
+		return
 	}
 
-	updatePlayerPosition(client.Player)
-	// New logic to check and capture territory
-	newPoint := models.Point{X: client.Player.X, Y: client.Player.Y}
-	client.Player.PlayerTrail = append(client.Player.PlayerTrail, newPoint) // Update trail with new position
-	checkAndCaptureTerritory(client.Player.ID, newPoint)                    // Check for and handle territory encapsulation
-
-	// Add the current position to the player's trail
-	client.Player.PlayerTrail = append(client.Player.PlayerTrail, models.Point{X: client.Player.X, Y: client.Player.Y})
-
-	// Check if the player has run into their own trail (at least 40px away from the back)
-	checkPlayerTrailCollision(client.Player)
-
-	// Check if the player has run into another player's trail
-	checkPlayerTrailCollisions(client)
+	for _, client := range clients {
+		if client.Conn != nil {
+			client.SendMessage(jsonMessage)
+		}
+	}
 }
 
 func handleCaptureMessage(client *Client, message models.RenderInstruction) {

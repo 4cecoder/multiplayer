@@ -34,6 +34,7 @@ const (
 	EventTypeError
 	EventTypeReconnect
 	EventTypeSignal
+	EventTypeMove
 )
 
 type Event struct {
@@ -80,7 +81,11 @@ func NewClient(conn *websocket.Conn, id string, messageQueue *MessageQueue) *Cli
 func (c *Client) ReadPump() {
 	defer func() {
 		c.emitEvent(Event{Type: EventTypeLogout, Client: c})
-		c.Conn.Close()
+		err := c.Conn.Close()
+		if err != nil {
+			log.Println("error closing connection:", err)
+			return
+		}
 		c.isClosed = true
 		close(c.Send)
 		close(c.SignalChannel)
@@ -265,6 +270,10 @@ func (c *Client) handleEvent(event Event) {
 		log.Printf("Attempting to reconnect client %s", c.ID)
 	case EventTypeSignal:
 		c.handleSignalMessage(event.Message)
+	case EventTypeMove:
+		log.Printf("Move event from client %s: %s", c.ID, string(event.Message))
+	default:
+		log.Printf("unhandled default case for event type %d", event.Type)
 	}
 }
 
@@ -275,6 +284,7 @@ func (c *Client) handleSignalMessage(message []byte) {
 		log.Printf("Error decoding signal message for client %s: %v", c.ID, err)
 		return
 	}
+	log.Println("Received signal message from client", c.ID, signalMessage)
 
 	switch signalMessage.Type {
 	case "offer":
@@ -286,6 +296,10 @@ func (c *Client) handleSignalMessage(message []byte) {
 	case "iceCandidate":
 		log.Printf("Received ICE candidate from client %s: %s", c.ID, signalMessage.Content)
 		// Handle the new ICE candidate
+	case "move":
+		log.Printf("Received move signal from client %s: %s", c.ID, signalMessage.Content)
+		// Handle the move signal
+		c.emitEvent(Event{Type: EventTypeMove, Client: c, Message: []byte(signalMessage.Content)})
 	default:
 		log.Printf("Unknown signal message type from client %s: %s", c.ID, signalMessage.Type)
 	}
